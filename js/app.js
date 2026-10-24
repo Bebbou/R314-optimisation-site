@@ -154,38 +154,73 @@
     }
   }
 
-  /* Aligne la hauteur des cartes et anime leur arrivée dans le viewport. */
+  /* Aligne la hauteur des cartes sur la plus grande, pour garder une grille
+     régulière. Une seule lecture de mise en page, après avoir remis à zéro. */
+  function alignCards() {
+    var cards = UIKit.qsa('.card');
+    var tallest = 0;
+    var i;
+
+    for (i = 0; i < cards.length; i++) {
+      cards[i].style.minHeight = '';
+    }
+    for (i = 0; i < cards.length; i++) {
+      if (cards[i].offsetHeight > tallest) {
+        tallest = cards[i].offsetHeight;
+      }
+    }
+    for (i = 0; i < cards.length; i++) {
+      cards[i].style.minHeight = tallest + 'px';
+    }
+  }
+
+  /* Anime l'arrivée des cartes et des cases du calendrier dans le viewport.
+     Toutes les lectures de position d'abord, toutes les écritures ensuite,
+     pour ne pas forcer une mise en page à chaque élément. */
   function revealCards() {
     var cards = UIKit.qsa('.card');
+    var jours = UIKit.qsa('.cal-day');
+    var vh = window.innerHeight;
+    var cardTops = [];
+    var dayTops = [];
+    var i;
 
-    for (var i = 0; i < cards.length; i++) {
-      var rect = cards[i].getBoundingClientRect();
+    for (i = 0; i < cards.length; i++) {
+      cardTops.push(cards[i].getBoundingClientRect().top);
+    }
+    for (i = 0; i < jours.length; i++) {
+      dayTops.push(jours[i].getBoundingClientRect().top);
+    }
 
-      // Hauteur de la plus grande carte, pour garder une grille régulière.
-      var tallest = 0;
-      var all = UIKit.qsa('.card');
-      for (var j = 0; j < all.length; j++) {
-        if (all[j].offsetHeight > tallest) {
-          tallest = all[j].offsetHeight;
-        }
-      }
-      cards[i].style.minHeight = tallest + 'px';
-
-      if (rect.top < window.innerHeight - 40) {
+    for (i = 0; i < cards.length; i++) {
+      if (cardTops[i] < vh - 40) {
         UIKit.cls(cards[i], 'visible', true);
         cards[i].style.transform = 'translateY(0px)';
       } else {
         cards[i].style.transform = 'translateY(24px)';
       }
     }
-
-    // Les cases du calendrier apparaissent progressivement à l'approche.
-    var jours = UIKit.qsa('.cal-day');
-    for (var k = 0; k < jours.length; k++) {
-      var box = jours[k].getBoundingClientRect();
-      var d = Math.abs(box.top - window.innerHeight / 2);
-      jours[k].style.opacity = Math.max(0.15, 1 - d / window.innerHeight);
+    for (i = 0; i < jours.length; i++) {
+      var d = Math.abs(dayTops[i] - vh / 2);
+      jours[i].style.opacity = Math.max(0.15, 1 - d / vh);
     }
+  }
+
+  /* Au plus un recalcul par image affichée, quel que soit le nombre
+     d'évènements de défilement reçus. */
+  var planifie = false;
+  function planifierReveal() {
+    if (planifie) return;
+    planifie = true;
+    window.requestAnimationFrame(function () {
+      planifie = false;
+      revealCards();
+    });
+  }
+
+  function onResizeOuLoad() {
+    alignCards();
+    planifierReveal();
   }
 
   /* Affiche les images une fois chargées. */
@@ -205,12 +240,13 @@
     buildKeywordIndex();
     buildActivityCalendar();
     watchImages();
+    alignCards();
     revealCards();
     var champ = UIKit.qs('#q');
     if (champ) champ.addEventListener('input', filterGallery);
   });
 
-  window.addEventListener('scroll', revealCards);
-  window.addEventListener('resize', revealCards);
-  window.addEventListener('load', revealCards);
+  window.addEventListener('scroll', planifierReveal, { passive: true });
+  window.addEventListener('resize', onResizeOuLoad);
+  window.addEventListener('load', onResizeOuLoad);
 })();
